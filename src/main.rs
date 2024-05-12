@@ -29,7 +29,6 @@ use tui::{
 
 mod db_helper;
 use db_helper::db_helper as db_mgr;
-
 mod run_py_struct;
 use run_py_struct::run_py_struct::RunPy;
 
@@ -306,7 +305,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         if active_menu_item == MenuItem::RunPy {
                             if let Some(selected) = py_list_state.selected() {
                                 let content_cli = read_db().expect("can fetch script list");
-                                let mut entered_script: String = content_cli.get(selected).unwrap().description.clone();
+                                let mut entered_script: String = content_cli.get(selected).unwrap().py_script.clone();
                                 if is_py_in_current_folder(&entered_script.as_str()){
                                     set_global_string(format!("Executed --- {:?}", &entered_script).as_str());
                                 } else{
@@ -336,6 +335,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                     KeyCode::Char('y') => {
                         if *READY_TO_INIT_DB.lock().expect("false") {
+                            py_list_state.select(Some(0));  // remove all will cause selected not match
                             set_log_string("You Initialized json DB");
                             let _init_status = db_mgr::overwrite_json( DATABASE_ADDR.lock().unwrap().clone());
                             set_init_db_status(false);
@@ -363,7 +363,7 @@ fn render_home<'a>() -> Paragraph<'a> {
             Style::default().fg(Color::LightBlue),
         )]),
         Spans::from(vec![Span::raw("")]),
-        Spans::from(vec![Span::raw("Press 'p' to run py script, 'a' to add random script,")]),
+        Spans::from(vec![Span::raw("Press 'r' to run py script, 'a' to add random script,")]),
         Spans::from(vec![Span::raw("Press 'd' to delete the currently selected script.")]),
         Spans::from(vec![Span::raw("Press 'i' to initialize the json database.")]),
         ])
@@ -390,13 +390,13 @@ fn render_scripts<'a>(py_list_state: &ListState) -> (List<'a>, Table<'a>) {
         .iter()
         .map(|py_script| {
             ListItem::new(Spans::from(vec![Span::styled(
-                py_script.description.clone(),  // show in Letf Screen
+                py_script.py_script.clone(),  // show in Letf Screen
                 Style::default(),
             )]))
         })
         .collect();
 
-    let selected_cmd = script_list
+    let selected_script = script_list
         .get(
             py_list_state
                 .selected()
@@ -413,10 +413,10 @@ fn render_scripts<'a>(py_list_state: &ListState) -> (List<'a>, Table<'a>) {
     );
 
     let run_py_detail = Table::new(vec![Row::new(vec![
-        Cell::from(Span::raw(selected_cmd.id.to_string())),
-        Cell::from(Span::raw(selected_cmd.description)),
-        Cell::from(Span::raw(selected_cmd.py_script)),
-        Cell::from(Span::raw(selected_cmd.created_at.to_string())),
+        Cell::from(Span::raw(selected_script.id.to_string())),
+        Cell::from(Span::raw(selected_script.py_script)),
+        Cell::from(Span::raw(selected_script.description)),
+        Cell::from(Span::raw(selected_script.created_at.to_string())),
     ])])
     .header(Row::new(vec![
         Cell::from(Span::styled(
@@ -475,8 +475,8 @@ fn add_random_script_to_db() -> Result<Vec<RunPy>, Error> {
         };
     let random_script = RunPy {
         id: rng.gen_range(0, 99),
-        description: catsdogs.to_owned(),
-        py_script: format!("mock$ {}", rand_description),
+        py_script: catsdogs.to_owned(),
+        description: format!("mock$ {}", rand_description),
         created_at: Utc::now(),
     };
 

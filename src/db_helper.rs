@@ -12,7 +12,7 @@ pub mod db_helper {
     use std::collections::HashMap;
     use std::fs::File;
     use std::path::Path;
-    use std::io::{Write};
+    use std::io::Write;
 
 
     pub fn read_env_file(filename: &str) -> io::Result<HashMap<String, String>> {
@@ -80,7 +80,7 @@ pub mod db_helper {
         // for startup use
         let path = Path::new(file_path);
         if !path.exists() {
-            let db_seed = one_seed();
+            let db_seed = build_seeds();
     
             // Open a file in write mode
             let mut file: File = std::fs::File::create(file_path)?;
@@ -93,8 +93,7 @@ pub mod db_helper {
 
     pub fn overwrite_json(db_addr: String) -> io::Result<()> {
         // for initialize flag use
-        let db_seed = one_seed();
-        scan_py_init();
+        let db_seed = build_seeds();
     
         // Open a file in write mode
         let mut file = std::fs::File::create(db_addr)?;
@@ -104,13 +103,36 @@ pub mod db_helper {
         Ok(())
     }
 
-    fn one_seed() -> Vec<RunPy>{
-        vec![RunPy {
+    fn build_seeds() -> Vec<RunPy>{
+        scan_py_init();
+        let mut seeds: Vec<RunPy> = vec![];
+        seeds.push(RunPy {
             id: 1,
-            description: "init description".to_string(),
             py_script: "default_script.py".to_string(),
+            description: "init description".to_string(),
             created_at: Utc::now(),
-        }] 
+        });
+
+        // Iterate over the files in the directory
+        for entry in fs::read_dir(".").expect("loop directory issuse") {
+            let entry = entry.expect("can't read inside the directory");
+            let path = entry.path();
+
+            // Check if the entry is a file with a `.py` extension
+            if let Some(extension) = path.extension() {
+                if extension == "py" {
+                    seeds.push(RunPy {
+                        id: 1,
+                        py_script: path.display().to_string(),
+                        description: "found it".to_string(),
+                        created_at: Utc::now(),
+                    });
+                    // println!("{}", path.display());
+                }
+            }
+        }
+
+        seeds
     }
 
     fn scan_py_init() {
