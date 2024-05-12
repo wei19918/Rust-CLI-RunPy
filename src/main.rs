@@ -10,7 +10,7 @@ use std::env;
 use std::fs;
 use std::io::{self};
 use std::path::Path;
-use std::process::Command;
+use std::process::{Command, Stdio};
 use std::sync::mpsc;
 use std::sync::Mutex;
 use std::thread;
@@ -314,11 +314,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 }
                                 // need to solve async
                                 let run_py = Command::new(PYTHON_BIND.lock().unwrap().clone())
-                                    .arg(entered_script)
+                                    .arg(entered_script) // Assuming you have a variable named entered_script
+                                    .stdout(Stdio::piped()) // Capture stdout
+                                    .stderr(Stdio::piped()) // Capture stderr
                                     .output()
                                     .expect("Failed to execute py");
-                                let py_output =
-                                    String::from_utf8(run_py.stdout).expect("Not UTF-8");
+
+                                // Check if the command was successful
+                                let mut py_output = String::new();
+                                if run_py.status.success() {
+                                    // Print stdout if the command succeeded
+                                    py_output = String::from_utf8_lossy(&run_py.stdout).to_string();
+                                } else {
+                                    // Print stderr if the command failed
+                                    py_output = String::from_utf8_lossy(&run_py.stderr).to_string();
+                                }
                                 set_log_string(format!("{}", py_output).as_str());
                             }
                         }
