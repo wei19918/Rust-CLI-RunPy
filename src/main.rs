@@ -6,13 +6,9 @@ use crossterm::{
 };
 use lazy_static::lazy_static;
 use rand::{distributions::Alphanumeric, prelude::*};
-// use serde::{Deserialize, Serialize};
-
 use std::env;
-
-// use std::fs::File;
 use std::fs;
-use std::io::{self, Write};
+use std::io::{self};
 use std::path::Path;
 use std::process::Command;
 use std::sync::mpsc;
@@ -32,7 +28,7 @@ use tui::{
 };
 
 mod db_helper;
-use db_helper::db_helper as test_db_helper;
+use db_helper::db_helper as db_mgr;
 
 mod run_py_struct;
 use run_py_struct::run_py_struct::RunPy;
@@ -76,15 +72,6 @@ fn set_init_db_status(new_value: bool) {
 }
 
 
-// Json Format
-// #[derive(Serialize, Deserialize, Clone, Debug)]
-// struct RunPy {
-//     id: usize,
-//     description: String,
-//     py_script: String,
-//     created_at: DateTime<Utc>,
-// }
-
 // Handling I/O Errors
 #[derive(Error, Debug)]
 pub enum Error {
@@ -117,7 +104,7 @@ impl From<MenuItem> for usize {
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     
     // if let Ok(env_vars) = read_env_file(".env") {
-    if let Ok(env_vars) = test_db_helper::read_env_file(".env") {
+    if let Ok(env_vars) = db_mgr::read_env_file(".env") {
         if let Some(value) = env_vars.get("DATABASE_ADDR") {
             println!("Value for DATABASE_ADDR: {}", value);
             set_db_addr(value.as_str());
@@ -141,7 +128,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Initialize json database
     // seed_database();
-    test_db_helper::seed_database2(DATABASE_ADDR.lock().unwrap().clone());
+    db_mgr::seed_database(DATABASE_ADDR.lock().unwrap().clone());
 
 
     let (tx, rx) = mpsc::channel();
@@ -263,7 +250,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             [Constraint::Percentage(20), Constraint::Percentage(80)].as_ref(),
                         )
                         .split(chunks[1]);
-                    let (left, right) = render_pets(&py_list_state);
+                    let (left, right) = render_scripts(&py_list_state);
                     rect.render_stateful_widget(left, run_py_chunks[0], &mut py_list_state);
                     rect.render_widget(right, run_py_chunks[1]);
                     rect.render_widget(action_msg.clone(), chunks[2]);
@@ -290,14 +277,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     KeyCode::Char('h') => active_menu_item = MenuItem::Home,
                     KeyCode::Char('r') => active_menu_item = MenuItem::RunPy,
                     KeyCode::Char('a') => {
-                        add_random_pet_to_db().expect("can add new random pet");
+                        add_random_script_to_db().expect("can add new random script");
                     }
                     KeyCode::Char('d') => {
-                        remove_cmd_at_index(&mut py_list_state).expect("can remove pet");
+                        remove_script_at_index(&mut py_list_state).expect("can remove script");
                     }
                     KeyCode::Down => {
                         if let Some(selected) = py_list_state.selected() {
-                            let amount_scripts = read_db().expect("can fetch pet list").len();
+                            let amount_scripts = read_db().expect("can fetch script list").len();
                             if selected >= amount_scripts - 1 {
                                 py_list_state.select(Some(0));  // move to first
                             } else {
@@ -307,7 +294,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                     KeyCode::Up => {
                         if let Some(selected) = py_list_state.selected() {
-                            let amount_scripts = read_db().expect("can fetch pet list").len();
+                            let amount_scripts = read_db().expect("can fetch script list").len();
                             if selected > 0 {
                                 py_list_state.select(Some(selected - 1));
                             } else {
@@ -318,7 +305,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     KeyCode::Enter => {
                         if active_menu_item == MenuItem::RunPy {
                             if let Some(selected) = py_list_state.selected() {
-                                let content_cli = read_db().expect("can fetch pet list");
+                                let content_cli = read_db().expect("can fetch script list");
                                 let mut entered_script: String = content_cli.get(selected).unwrap().description.clone();
                                 if is_py_in_current_folder(&entered_script.as_str()){
                                     set_global_string(format!("Executed --- {:?}", &entered_script).as_str());
@@ -350,7 +337,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     KeyCode::Char('y') => {
                         if *READY_TO_INIT_DB.lock().expect("false") {
                             set_log_string("You Initialized json DB");
-                            let _init_status = overwrite_json();
+                            let _init_status = db_mgr::overwrite_json( DATABASE_ADDR.lock().unwrap().clone());
                             set_init_db_status(false);
                         }
                     }
@@ -391,7 +378,7 @@ fn render_home<'a>() -> Paragraph<'a> {
     home
 }
 
-fn render_pets<'a>(py_list_state: &ListState) -> (List<'a>, Table<'a>) {
+fn render_scripts<'a>(py_list_state: &ListState) -> (List<'a>, Table<'a>) {
     let py_scripts = Block::default()
         .borders(Borders::ALL)
         .style(Style::default().fg(Color::White))
@@ -413,7 +400,7 @@ fn render_pets<'a>(py_list_state: &ListState) -> (List<'a>, Table<'a>) {
         .get(
             py_list_state
                 .selected()
-                .expect("there is always a selected pet"),
+                .expect("there is always a selected script"),
         )
         .expect("exists")
         .clone();
@@ -472,7 +459,7 @@ fn read_db() -> Result<Vec<RunPy>, Error> {
     Ok(parsed)
 }
 
-fn add_random_pet_to_db() -> Result<Vec<RunPy>, Error> {
+fn add_random_script_to_db() -> Result<Vec<RunPy>, Error> {
     let mut rng = rand::thread_rng();
     let db_content = fs::read_to_string(DATABASE_ADDR.lock().unwrap().clone())?;
     let mut parsed: Vec<RunPy> = serde_json::from_str(&db_content)?;
@@ -486,19 +473,19 @@ fn add_random_pet_to_db() -> Result<Vec<RunPy>, Error> {
             0 => "script.py",
             _ => &rand_py,
         };
-    let random_pet = RunPy {
+    let random_script = RunPy {
         id: rng.gen_range(0, 99),
         description: catsdogs.to_owned(),
         py_script: format!("mock$ {}", rand_description),
         created_at: Utc::now(),
     };
 
-    parsed.push(random_pet);
+    parsed.push(random_script);
     fs::write(DATABASE_ADDR.lock().unwrap().clone().as_str(), &serde_json::to_vec(&parsed)?)?;
     Ok(parsed)
 }
 
-fn remove_cmd_at_index(py_list_state: &mut ListState) -> Result<(), Error> {
+fn remove_script_at_index(py_list_state: &mut ListState) -> Result<(), Error> {
     if let Some(selected) = py_list_state.selected() {
         let db_content = fs::read_to_string(DATABASE_ADDR.lock().unwrap().clone())?;
         let mut parsed: Vec<RunPy> = serde_json::from_str(&db_content)?;
@@ -516,90 +503,6 @@ fn remove_cmd_at_index(py_list_state: &mut ListState) -> Result<(), Error> {
         }
     }
     Ok(())
-}
-
-fn get_directory_from_path(file_path: &str) -> &str {
-    let path = Path::new(file_path);
-    // Get the parent path, convert it to `&str`, and provide a default if `None`
-    path.parent()
-        .and_then(|p| p.to_str()) // Convert to `<&str>`
-        .unwrap_or("./data") // Default to root if the parent or conversion fails
-}
-
-fn create_json_if_not_exists(file_path: &str) -> io::Result<()> {
-    // for startup use
-    let path = Path::new(file_path);
-    if !path.exists() {
-        let db_seed = one_seed();
-
-        // Open a file in write mode
-        let mut file = std::fs::File::create(file_path)?;
-
-        // Write the JSON data to the file
-        write!(file, "{}", serde_json::to_string_pretty(&db_seed)?)?;
-    }
-    Ok(())
-}
-fn overwrite_json() -> io::Result<()> {
-    // for initialize flag use
-    let db_seed = one_seed();
-    scan_py_init();
-
-    // Open a file in write mode
-    let mut file = std::fs::File::create(DATABASE_ADDR.lock().unwrap().clone())?;
-
-    // Write the JSON data to the file
-    write!(file, "{}", serde_json::to_string_pretty(&db_seed)?)?;
-    set_init_db_status(false);
-    Ok(())
-}
-fn one_seed() -> Vec<RunPy>{
-    vec![RunPy {
-        id: 1,
-        description: "init description".to_string(),
-        py_script: "default_script.py".to_string(),
-        created_at: Utc::now(),
-    }] 
-}
-fn scan_py_init() {
-    // scan all py file and make into defualt json db
-
-}
-
-fn create_folder_if_not_exists(folder_path: &str) -> io::Result<()> {
-    if !fs::metadata(folder_path).is_ok() {
-        // This will create all necessary intermediate directories
-        fs::create_dir_all(folder_path)?;
-    }
-    Ok(())
-}
-
-fn seed_database() {
-    // Extract the directory part from the file path and store it in a variable
-    let db_p = DATABASE_ADDR.lock().unwrap().clone();
-    let directory_path: &str = get_directory_from_path(db_p.as_str());
-
-    if !directory_path.is_empty() {
-        // Check if it exists and create if necessary
-        if !fs::metadata(directory_path).is_ok() {
-            fs::create_dir_all(directory_path).expect("Failed to create directory");
-        }
-    } else {
-        println!("No directory part found.");
-    }
-
-    // Create folder if doesn't exist
-    match create_folder_if_not_exists(directory_path) {
-        Ok(_) => println!("Folder created or already exists."),
-        Err(e) => println!("Error creating folder: {}", e),
-    }
-
-    // Create the JSON file if doesn't exist
-    if let Err(e) = create_json_if_not_exists(db_p.as_str()) {
-        println!("Error creating JSON file: {}", e);
-    } else {
-        println!("JSON file created or already exists.");
-    }
 }
 
 fn is_py_in_current_folder(name: &str) -> bool {

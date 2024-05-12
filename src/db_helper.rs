@@ -33,7 +33,7 @@ pub mod db_helper {
         Ok(result)
     }
 
-    pub fn seed_database2(db_p: String) {
+    pub fn seed_database(db_p: String) {
         // Extract the directory part from the file path and store it in a variable
         let directory_path: &str = get_directory_from_path(db_p.as_str());
     
@@ -68,6 +68,14 @@ pub mod db_helper {
             .unwrap_or("./data") // Default to root if the parent or conversion fails
     }
 
+    fn create_folder_if_not_exists(folder_path: &str) -> io::Result<()> {
+        if !fs::metadata(folder_path).is_ok() {
+            // This will create all necessary intermediate directories
+            fs::create_dir_all(folder_path)?;
+        }
+        Ok(())
+    }
+    
     fn create_json_if_not_exists(file_path: &str) -> io::Result<()> {
         // for startup use
         let path = Path::new(file_path);
@@ -83,12 +91,16 @@ pub mod db_helper {
         Ok(())
     }
 
-
-    fn create_folder_if_not_exists(folder_path: &str) -> io::Result<()> {
-        if !fs::metadata(folder_path).is_ok() {
-            // This will create all necessary intermediate directories
-            fs::create_dir_all(folder_path)?;
-        }
+    pub fn overwrite_json(db_addr: String) -> io::Result<()> {
+        // for initialize flag use
+        let db_seed = one_seed();
+        scan_py_init();
+    
+        // Open a file in write mode
+        let mut file = std::fs::File::create(db_addr)?;
+    
+        // Write the JSON data to the file
+        write!(file, "{}", serde_json::to_string_pretty(&db_seed)?)?;
         Ok(())
     }
 
@@ -99,6 +111,11 @@ pub mod db_helper {
             py_script: "default_script.py".to_string(),
             created_at: Utc::now(),
         }] 
+    }
+
+    fn scan_py_init() {
+        // scan all py file and make into defualt json db
+    
     }
 
 
