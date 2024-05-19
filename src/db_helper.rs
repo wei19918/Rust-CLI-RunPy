@@ -48,8 +48,8 @@ pub mod db_helper {
     
         // Create folder if doesn't exist
         match create_folder_if_not_exists(directory_path) {
-            Ok(_) => println!("Folder created or already exists."),
-            Err(e) => println!("Error creating folder: {}", e),
+            Ok(_) => println!("Data Folder created or already exists."),
+            Err(e) => println!("Error creating data folder: {}", e),
         }
     
         // Create the JSON file if doesn't exist
@@ -104,7 +104,6 @@ pub mod db_helper {
     }
 
     fn build_seeds() -> Vec<RunPy>{
-        scan_py_init();
         let mut seeds: Vec<RunPy> = vec![];
         seeds.push(RunPy {
             id: 1,
@@ -127,19 +126,10 @@ pub mod db_helper {
                         description: "found it".to_string(),
                         created_at: Utc::now(),
                     });
-                    // println!("{}", path.display());
                 }
             }
         }
-
         seeds
     }
-
-    fn scan_py_init() {
-        // scan all py file and make into defualt json db
-    
-    }
-
-
 }
 

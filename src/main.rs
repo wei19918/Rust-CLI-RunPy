@@ -52,13 +52,13 @@ fn set_py_bind(new_value: &str) {
     let mut global = PYTHON_BIND.lock().unwrap();
     *global = new_value.to_string(); // Update the global string
 }
-fn set_global_string(new_value: &str) {
+fn set_action_msg(new_value: &str) {
     // Lock the mutex to mutate the global string
     let mut global = ACTION_MSG.lock().unwrap();
     *global = new_value.to_string(); // Update the global string
 }
 
-fn set_log_string(new_value: &str) {
+fn set_log_msg(new_value: &str) {
     // Lock the mutex to mutate the global string
     let mut global = LOG_MSG.lock().unwrap();
     *global = new_value.to_string(); // Update the global string
@@ -101,8 +101,7 @@ impl From<MenuItem> for usize {
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    
-    // if let Ok(env_vars) = read_env_file(".env") {
+    // Read .env
     if let Ok(env_vars) = db_mgr::read_env_file(".env") {
         if let Some(value) = env_vars.get("DATABASE_ADDR") {
             println!("Value for DATABASE_ADDR: {}", value);
@@ -116,19 +115,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         } else {
             println!("PYTHON_BIND default to {}", PYTHON_BIND.lock().unwrap().clone());
         }
-        
     } else {
         eprintln!("Failed to read .env file");
     }
-    //const db_addr: &str = dotenv!("DATABASE_ADDR");
-
 
     enable_raw_mode().expect("can run in raw mode");
 
     // Initialize json database
-    // seed_database();
     db_mgr::seed_database(DATABASE_ADDR.lock().unwrap().clone());
-
 
     let (tx, rx) = mpsc::channel();
     let tick_rate = Duration::from_millis(250);
@@ -183,7 +177,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .split(size);
 
             let copyright =
-                Paragraph::new("pet-CLI 2020 - all rights reserved, modified 2024, Will")
+                Paragraph::new("Fork from pet-CLI 2020")
                     .style(Style::default().fg(Color::LightCyan))
                     .alignment(Alignment::Center)
                     .block(
@@ -193,9 +187,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             .title("Copyright")
                             .border_type(BorderType::Plain),
                     );
-
-            let global_action_msg = ACTION_MSG.lock().unwrap().clone();
-            let action_msg = Paragraph::new(global_action_msg)
+            let action_msg = Paragraph::new(ACTION_MSG.lock().unwrap().clone())
                 .style(Style::default().fg(Color::LightCyan))
                 .alignment(Alignment::Center)
                 .block(
@@ -205,8 +197,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         .title("Your last input action")
                         .border_type(BorderType::Plain),
                 );
-            let global_log_msg = LOG_MSG.lock().unwrap().clone();
-            let log_msg = Paragraph::new(global_log_msg)
+            let log_msg = Paragraph::new(LOG_MSG.lock().unwrap().clone())
                 .style(Style::default().fg(Color::LightCyan))
                 .alignment(Alignment::Center)
                 .block(
@@ -265,7 +256,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 // show pressed key
                 let format_string = format!("pressed --- {:?}", event.code);
                 let pressed_key: &str = format_string.as_str();
-                set_global_string(pressed_key);
+                set_action_msg(pressed_key);
 
                 match event.code {
                     KeyCode::Char('q') => {
@@ -307,10 +298,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 let content_cli = read_db().expect("can fetch script list");
                                 let mut entered_script: String = content_cli.get(selected).unwrap().py_script.clone();
                                 if is_py_in_current_folder(&entered_script.as_str()){
-                                    set_global_string(format!("Executed --- {:?}", &entered_script).as_str());
+                                    set_action_msg(format!("Executed --- {:?}", &entered_script).as_str());
                                 } else{
                                     entered_script = String::from("default_script.py");
-                                    set_global_string(format!("Executed --- default_script.py").as_str());
+                                    set_action_msg(format!("Executed --- default_script.py").as_str());
                                 }
                                 // need to solve async
                                 let run_py = Command::new(PYTHON_BIND.lock().unwrap().clone())
@@ -320,33 +311,30 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                     .output()
                                     .expect("Failed to execute py");
 
-                                // Check if the command was successful
-                                let mut py_output = String::new();
-                                if run_py.status.success() {
-                                    // Print stdout if the command succeeded
-                                    py_output = String::from_utf8_lossy(&run_py.stdout).to_string();
+                                // if command was successful, print stdout, otherwise print stderr
+                                let py_output = if run_py.status.success() {
+                                    String::from_utf8_lossy(&run_py.stdout).to_string()
                                 } else {
-                                    // Print stderr if the command failed
-                                    py_output = String::from_utf8_lossy(&run_py.stderr).to_string();
-                                }
-                                set_log_string(format!("{}", py_output).as_str());
+                                    String::from_utf8_lossy(&run_py.stderr).to_string()
+                                };
+                                set_log_msg(format!("{}", py_output).as_str());
                             }
                         }
                     }
-                    // a flip-flop for 
+                    // a flip-flop for init flag
                     KeyCode::Char('i') => {
                         if !*READY_TO_INIT_DB.lock().expect("false") {
-                            set_log_string("InitDB Flag is ON. Do you want to initialize DB?\nPress y at anytime to proceed.\nPress i again to remove InitDB Flag.");
+                            set_log_msg("InitDB Flag is ON. Do you want to initialize DB?\nPress y at anytime to proceed.\nPress i again to remove InitDB Flag.");
                             set_init_db_status(true);
                         } else{
-                            set_log_string("InitDB Flag is OFF");
+                            set_log_msg("InitDB Flag is OFF");
                             set_init_db_status(false);
                         }
                     }
                     KeyCode::Char('y') => {
                         if *READY_TO_INIT_DB.lock().expect("false") {
                             py_list_state.select(Some(0));  // remove all will cause selected not match
-                            set_log_string("You Initialized json DB");
+                            set_log_msg("You Initialized json DB");
                             let _init_status = db_mgr::overwrite_json( DATABASE_ADDR.lock().unwrap().clone());
                             set_init_db_status(false);
                         }
@@ -373,8 +361,10 @@ fn render_home<'a>() -> Paragraph<'a> {
             Style::default().fg(Color::LightBlue),
         )]),
         Spans::from(vec![Span::raw("")]),
-        Spans::from(vec![Span::raw("Press 'r' to run py script, 'a' to add random script,")]),
-        Spans::from(vec![Span::raw("Press 'd' to delete the currently selected script.")]),
+        Spans::from(vec![Span::raw("Place your routine py files in root folder.")]),
+        Spans::from(vec![Span::raw("Press 'r' to visit RunPy page.")]),
+        Spans::from(vec![Span::raw("Press 'Enter' to run selected script.")]),
+        Spans::from(vec![Span::raw("Press 'd' to delete selected script")]),
         Spans::from(vec![Span::raw("Press 'i' to initialize the json database.")]),
         ])
     .alignment(Alignment::Center)
@@ -501,7 +491,7 @@ fn remove_script_at_index(py_list_state: &mut ListState) -> Result<(), Error> {
         let mut parsed: Vec<RunPy> = serde_json::from_str(&db_content)?;
 
         if parsed.len() == 1 {
-            set_global_string("DB has only one element left. Operation skipped.");
+            set_action_msg("DB has only one element left. Operation skipped.");
             return Ok(());
         }
         parsed.remove(selected);
