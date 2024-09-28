@@ -9,6 +9,7 @@ pub mod db_helper {
     use chrono::prelude::*;
     use std::fs;
     use std::io::{self, BufRead};
+    use std::io::ErrorKind;
     use std::collections::HashMap;
     use std::fs::File;
     use std::path::Path;
@@ -16,7 +17,15 @@ pub mod db_helper {
 
 
     pub fn read_env_file(filename: &str) -> io::Result<HashMap<String, String>> {
-        let file = File::open(filename)?;
+        let file = match File::open(filename) {
+            Ok(file) => file,
+            Err(ref error) if error.kind() == ErrorKind::NotFound => {
+                panic!("Warning: File '{}' not found. Add .env at root folder.", filename);
+            }
+            Err(error) => {
+                panic!("Problem opening the file: {:?}. Check evn format", error);
+            }
+        };
         let reader = io::BufReader::new(file);
     
         let mut result = HashMap::new();

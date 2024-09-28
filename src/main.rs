@@ -385,7 +385,9 @@ fn render_scripts<'a>(py_list_state: &ListState) -> (List<'a>, Table<'a>) {
         .title("PyScripts")
         .border_type(BorderType::Plain);
 
-    let script_list = read_db().expect("can fetch py list");
+    let script_list = read_db().unwrap_or_else(|_err| {
+        panic!("Can't fetch py list. Please proceeed with init <i>.")
+    });
     let items: Vec<_> = script_list
         .iter()
         .map(|py_script| {
